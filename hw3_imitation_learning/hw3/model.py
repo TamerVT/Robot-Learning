@@ -19,17 +19,14 @@ class BasePolicy(nn.Module, metaclass=abc.ABCMeta):
         self.chunk_size = chunk_size
 
     @abc.abstractmethod
-    def compute_loss(
-        self, state: torch.Tensor, action_chunk: torch.Tensor
-    ) -> torch.Tensor:
+    def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
         """Compute training loss for a batch."""
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_actions(
-        self,
-        state: torch.Tensor,
-    ) -> torch.Tensor:
+    def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
         """Generate a chunk of actions with shape (batch, chunk_size, action_dim)."""
+        raise NotImplementedError
 
 
 # TODO: Students implement ObstaclePolicy here.
@@ -40,26 +37,14 @@ class ObstaclePolicy(BasePolicy):
     (chunk_size * action_dim) and reshapes to (B, chunk_size, action_dim).
     """
 
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-
-    def forward(
-        self,
-    ) -> torch.Tensor:
+    def forward(self) -> torch.Tensor:
         """Return predicted action chunk of shape (B, chunk_size, action_dim)."""
         raise NotImplementedError
 
-    def compute_loss(
-        self,
-    ) -> torch.Tensor:
+    def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
-    def sample_actions(
-        self,
-        state: torch.Tensor,
-    ) -> torch.Tensor:
+    def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
 
@@ -67,24 +52,13 @@ class ObstaclePolicy(BasePolicy):
 class MultiTaskPolicy(BasePolicy):
     """Goal-conditioned policy for the multicube scene."""
 
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-
-    def compute_loss(
-        self,
-    ) -> torch.Tensor:
+    def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
-    def sample_actions(
-        self,
-    ) -> torch.Tensor:
+    def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
-    def forward(
-        self,
-    ) -> torch.Tensor:
+    def forward(self) -> torch.Tensor:
         """Return predicted action chunk of shape (B, chunk_size, action_dim)."""
         raise NotImplementedError
 
@@ -97,6 +71,7 @@ def build_policy(
     *,
     state_dim: int,
     action_dim: int,
+    # TODO,
 ) -> BasePolicy:
     if policy_type == "obstacle":
         return ObstaclePolicy(
