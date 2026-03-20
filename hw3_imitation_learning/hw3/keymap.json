@@ -36,39 +36,39 @@
     "description": "Move EE backward (-Y) (recommended: S)"
   },
   "rot_x_pos": {
-    "raw": 100,
-    "ascii": 100,
-    "label": "d",
+    "raw": 48,
+    "ascii": 48,
+    "label": "0",
     "description": "Rotate EE +X axis"
   },
   "rot_x_neg": {
-    "raw": 97,
-    "ascii": 97,
-    "label": "a",
+    "raw": 57,
+    "ascii": 57,
+    "label": "9",
     "description": "Rotate EE -X axis"
   },
   "rot_y_pos": {
-    "raw": 108,
-    "ascii": 108,
-    "label": "l",
+    "raw": 56,
+    "ascii": 56,
+    "label": "8",
     "description": "Rotate EE +Y axis"
   },
   "rot_y_neg": {
-    "raw": 106,
-    "ascii": 106,
-    "label": "j",
+    "raw": 55,
+    "ascii": 55,
+    "label": "7",
     "description": "Rotate EE -Y axis"
   },
   "rot_z_pos": {
-    "raw": 105,
-    "ascii": 105,
-    "label": "i",
+    "raw": 54,
+    "ascii": 54,
+    "label": "6",
     "description": "Rotate EE +Z axis"
   },
   "rot_z_neg": {
-    "raw": 107,
-    "ascii": 107,
-    "label": "k",
+    "raw": 53,
+    "ascii": 53,
+    "label": "5",
     "description": "Rotate EE -Z axis"
   },
   "gripper_open": {
@@ -108,21 +108,21 @@
     "description": "Quit session (recommended: ESC)"
   },
   "goal_cube_red": {
-    "raw": 102,
-    "ascii": 102,
-    "label": "f",
+    "raw": 106,
+    "ascii": 106,
+    "label": "j",
     "description": "Select RED cube as goal (multicube only)"
   },
   "goal_cube_green": {
-    "raw": 103,
-    "ascii": 103,
-    "label": "g",
+    "raw": 107,
+    "ascii": 107,
+    "label": "k",
     "description": "Select GREEN cube as goal (multicube only)"
   },
   "goal_cube_blue": {
-    "raw": 104,
-    "ascii": 104,
-    "label": "h",
+    "raw": 108,
+    "ascii": 108,
+    "label": "l",
     "description": "Select BLUE cube as goal (multicube only)"
   }
 }

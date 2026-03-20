@@ -1,0 +1,26 @@
+{
+  "attributes": {
+    "xml": "C:\\Users\\TEMP\\Robot-Learning\\hw3_imitation_learning\\so101_gym\\assets\\so100_transfer_cube_obstacle_ee.xml",
+    "joint_names": [
+      "Rotation",
+      "Pitch",
+      "Elbow",
+      "Wrist_Pitch",
+      "Wrist_Roll",
+      "Jaw"
+    ],
+    "state_joints_spec": "qpos(joints)",
+    "state_ee_spec": "ee_pos(3) + ee_quat_wxyz(4)",
+    "state_cube_spec": "cube_pos(3) + cube_quat_wxyz(4)",
+    "state_gripper_spec": "gripper_angle(1)",
+    "action_gripper_spec": "gripper_ctrl(1)",
+    "control_hz": 10.0,
+    "cameras_display": [
+      "left_wrist",
+      "angle",
+      "top"
+    ]
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
