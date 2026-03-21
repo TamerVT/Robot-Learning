@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import torch
 import zarr as zarr_lib
 from hw3.dataset import (
@@ -22,8 +23,70 @@ from hw3.dataset import (
     load_and_merge_zarrs,
     load_zarr,
 )
+from hw3.eval_utils import parse_key_spec
 from hw3.model import BasePolicy, build_policy
 from torch.utils.data import DataLoader, random_split
+
+# ── full dimensions of every known state key ──────────────────────────────────
+_KEY_DIMS: dict[str, int] = {
+    "state_ee_xyz": 3,
+    "state_ee_full": 7,
+    "state_joints": 6,
+    "state_gripper": 1,
+    "state_cube": 7,
+    "state_obstacle": 3,
+    "goal_pos": 3,
+    "original_pos_cube_red": 7,
+    "original_pos_cube_green": 7,
+    "original_pos_cube_blue": 7,
+    "state_goal": 3,
+}
+
+
+def _multitask_layout(state_keys: list[str]) -> dict:
+    """Infer MultiTaskPolicy layout indices from the ordered state_keys list.
+
+    Returns a dict with keys: goal_start, goal_dim, ee_start, bin_start,
+    cube_starts (list of ints, order: red/green/blue).
+    Any value may be None if the corresponding key is absent.
+    """
+    _CUBE_ORDER = [
+        "original_pos_cube_red",
+        "original_pos_cube_green",
+        "original_pos_cube_blue",
+    ]
+    offset = 0
+    goal_start = None
+    ee_start   = None
+    bin_start  = None
+    cube_starts_map: dict[str, int] = {}
+
+    for spec in state_keys:
+        name, sl = parse_key_spec(spec)
+        full_dim = _KEY_DIMS.get(name, 0)
+        if full_dim == 0:
+            continue
+        dim = len(np.arange(full_dim)[sl]) if sl != slice(None) else full_dim
+
+        if name == "state_goal":
+            goal_start = offset
+        elif name == "state_ee_xyz":
+            ee_start = offset
+        elif name == "goal_pos":
+            bin_start = offset
+        elif name in _CUBE_ORDER:
+            cube_starts_map[name] = offset
+
+        offset += dim
+
+    cube_starts = [cube_starts_map[k] for k in _CUBE_ORDER if k in cube_starts_map] or None
+    return {
+        "goal_start": goal_start,
+        "goal_dim":   3,
+        "ee_start":   ee_start,
+        "bin_start":  bin_start,
+        "cube_starts": cube_starts,
+    }
 
 # Hyperparameters
 EPOCHS = 300
@@ -157,6 +220,12 @@ def main() -> None:
         "If omitted, uses the action_key attribute from the zarr metadata.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument(
+        "--goal-emb-dim",
+        type=int,
+        default=16,
+        help="Learnable goal embedding width for MultiTaskPolicy (default: 16).",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -208,6 +277,13 @@ def main() -> None:
     )
 
     # ── model ─────────────────────────────────────────────────────────
+    layout: dict = {}
+    if args.policy == "multitask" and args.state_keys:
+        layout = _multitask_layout(args.state_keys)
+        print(f"MultiTask layout: goal_start={layout['goal_start']}, "
+              f"ee_start={layout['ee_start']}, bin_start={layout['bin_start']}, "
+              f"cube_starts={layout['cube_starts']}")
+
     model = build_policy(
         args.policy,
         state_dim=states.shape[1],
@@ -216,6 +292,12 @@ def main() -> None:
         d_model=args.d_model,
         depth=args.depth,
         dropout=args.dropout,
+        goal_start=layout.get("goal_start", 9),
+        goal_dim=layout.get("goal_dim", 3),
+        goal_emb_dim=args.goal_emb_dim,
+        ee_start=layout.get("ee_start", 15),
+        bin_start=layout.get("bin_start", 12),
+        cube_starts=layout.get("cube_starts", None),
     ).to(device)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -280,6 +362,13 @@ def main() -> None:
                     "val_loss": val_loss,
                     "d_model": args.d_model,
                     "depth": args.depth,
+                    # MultiTaskPolicy layout (harmless to store for obstacle policy too)
+                    "goal_start":   layout.get("goal_start", 9),
+                    "goal_dim":     layout.get("goal_dim", 3),
+                    "goal_emb_dim": args.goal_emb_dim,
+                    "ee_start":     layout.get("ee_start", 15),
+                    "bin_start":    layout.get("bin_start", 12),
+                    "cube_starts":  layout.get("cube_starts", None),
                 },
                 save_path,
             )

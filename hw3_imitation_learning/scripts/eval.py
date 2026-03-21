@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 import torch
 from hw3.eval_utils import (
+    TemporalEnsemble,
     apply_action,
     check_cube_out_of_bounds,
     check_success,
@@ -50,6 +51,8 @@ def run_episode(
     total: int,
     headless: bool,
     multicube: bool,
+    temporal_ensemble: bool = False,
+    te_k: float = 0.1,
 ) -> tuple[bool, bool, str | None]:
     """Run one evaluation episode.
 
@@ -58,20 +61,30 @@ def run_episode(
     """
     obs = env.reset()
     action_queue: list[np.ndarray] = []
+    ensembler: TemporalEnsemble | None = None
     step = 0
 
     while step < max_steps:
-        if not action_queue:
+        if temporal_ensemble:
             chunk = infer_action_chunk(
-                model=model,
-                normalizer=normalizer,
-                obs=obs,
-                state_keys=state_keys,
-                device=device,
+                model=model, normalizer=normalizer,
+                obs=obs, state_keys=state_keys, device=device,
             )
-            action_queue.extend(chunk)
-
-        action = action_queue.pop(0)
+            if ensembler is None:
+                ensembler = TemporalEnsemble(chunk_size=len(chunk), k=te_k)
+            ensembler.push(step, chunk)
+            action = ensembler.get(step)
+        else:
+            if not action_queue:
+                chunk = infer_action_chunk(
+                    model=model,
+                    normalizer=normalizer,
+                    obs=obs,
+                    state_keys=state_keys,
+                    device=device,
+                )
+                action_queue.extend(chunk)
+            action = action_queue.pop(0)
         apply_action(env, action, action_keys)
         obs = env.step()
         step += 1
@@ -175,6 +188,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--goal-cube", type=str, default="all", choices=["red", "green", "blue", "all"], help="Goal colour for multicube ('all' cycles evenly).")
     parser.add_argument("--no-shuffle", action="store_true", help="Disable multicube slot shuffling.")
 
+    # inference args
+    parser.add_argument("--temporal-ensemble", action="store_true",
+                        help="Use temporal ensembling (query model every step, weighted avg).")
+    parser.add_argument("--te-k", type=float, default=0.1,
+                        help="Decay factor k for temporal ensembling (default: 0.1).")
+
     return parser.parse_args()
 
 
@@ -245,6 +264,8 @@ def main() -> None:
                 total=ep - 1,
                 headless=args.headless,
                 multicube=args.multicube,
+                temporal_ensemble=args.temporal_ensemble,
+                te_k=args.te_k,
             )
             if aborted:
                 print("Aborted by user.")

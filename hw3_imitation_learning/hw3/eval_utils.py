@@ -117,6 +117,18 @@ def load_checkpoint(
     d_model = int(ckpt.get("d_model", 128))
     depth = int(ckpt.get("depth", 2))
     policy_type = str(ckpt.get("policy_type", "obstacle"))
+
+    # MultiTaskPolicy layout (present only in multitask checkpoints)
+    goal_start   = int(ckpt.get("goal_start", 9))
+    goal_dim     = int(ckpt.get("goal_dim", 3))
+    goal_emb_dim = int(ckpt.get("goal_emb_dim", 16))
+    ee_start     = ckpt.get("ee_start", 15)
+    bin_start    = ckpt.get("bin_start", 12)
+    cube_starts  = ckpt.get("cube_starts", None)
+    if ee_start  is not None: ee_start  = int(ee_start)
+    if bin_start is not None: bin_start = int(bin_start)
+    if cube_starts is not None: cube_starts = [int(x) for x in cube_starts]
+
     model = build_policy(
         policy_type,
         state_dim=state_dim,
@@ -124,6 +136,12 @@ def load_checkpoint(
         chunk_size=chunk_size,
         d_model=d_model,
         depth=depth,
+        goal_start=goal_start,
+        goal_dim=goal_dim,
+        goal_emb_dim=goal_emb_dim,
+        ee_start=ee_start,
+        bin_start=bin_start,
+        cube_starts=cube_starts,
     )
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
@@ -282,6 +300,54 @@ def check_cube_out_of_bounds(
     if cube[1] < y_range[0] or cube[1] > y_range[1]:
         return True
     return False
+
+
+class TemporalEnsemble:
+    """Rolling weighted average of overlapping action-chunk predictions.
+
+    At every timestep the policy is queried for a full chunk of K actions.
+    The action executed at step *t* is a weighted average over all chunks
+    that cover *t*, with exponentially decaying weights by chunk age::
+
+        w(age) = exp(-k * age)   where age = t - t_prediction
+
+    A small *k* (e.g. 0.01) weights all overlapping chunks nearly equally;
+    a large *k* (e.g. 0.5) strongly prefers the most recent prediction.
+
+    Usage in an eval loop::
+
+        ens = TemporalEnsemble(chunk_size=16, k=0.1)
+        for step in range(max_steps):
+            chunk = infer_action_chunk(...)   # call every step
+            ens.push(step, chunk)
+            action = ens.get(step)
+            apply_action(env, action, action_keys)
+    """
+
+    def __init__(self, chunk_size: int, k: float = 0.1) -> None:
+        self.chunk_size = chunk_size
+        self.k = k
+        # Each entry: (step_at_prediction, chunk_array of shape (K, action_dim))
+        self._preds: list[tuple[int, np.ndarray]] = []
+
+    def push(self, t: int, chunk: np.ndarray) -> None:
+        """Record a new chunk prediction made at step *t*."""
+        self._preds.append((t, chunk))
+        # Drop predictions that no longer cover any future step
+        self._preds = [(tp, ch) for tp, ch in self._preds if t - tp < self.chunk_size]
+
+    def get(self, t: int) -> np.ndarray:
+        """Return the weighted-ensemble action for step *t*."""
+        action_dim = self._preds[0][1].shape[1]
+        weighted  = np.zeros(action_dim, dtype=np.float32)
+        w_total   = 0.0
+        for tp, ch in self._preds:
+            pos = t - tp
+            if 0 <= pos < self.chunk_size:
+                w = float(np.exp(-self.k * pos))
+                weighted += w * ch[pos]
+                w_total  += w
+        return weighted / max(w_total, 1e-8)
 
 
 def check_wrong_cube_in_bin(
