@@ -303,11 +303,12 @@ def main() -> None:
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {n_params:,}")
 
+    raw_model = model  # keep reference for clean state_dict on save
     try:
         model = torch.compile(model)
         print("torch.compile enabled")
     except Exception:
-        pass  # not supported on this platform/version
+        raw_model = model  # compile not available, same object
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
@@ -351,7 +352,7 @@ def main() -> None:
             torch.save(
                 {
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
+                    "model_state_dict": raw_model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "normalizer": {
                         "state_mean": normalizer.state_mean,

@@ -143,7 +143,11 @@ def load_checkpoint(
         bin_start=bin_start,
         cube_starts=cube_starts,
     )
-    model.load_state_dict(ckpt["model_state_dict"])
+    state_dict = ckpt["model_state_dict"]
+    # torch.compile() prefixes keys with "_orig_mod." — strip it for compatibility
+    if any(k.startswith("_orig_mod.") for k in state_dict):
+        state_dict = {k.removeprefix("_orig_mod."): v for k, v in state_dict.items()}
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 
