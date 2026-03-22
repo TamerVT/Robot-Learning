@@ -1,0 +1,8 @@
+{
+  "attributes": {
+    "num_dagger_episodes": 15,
+    "goal_cube": "all"
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

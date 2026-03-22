@@ -270,10 +270,10 @@ def main() -> None:
     )
 
     train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0
+        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=2, persistent_workers=True
     )
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0
+        val_ds, batch_size=args.batch_size, shuffle=False, num_workers=2, persistent_workers=True
     )
 
     # ── model ─────────────────────────────────────────────────────────
@@ -302,6 +302,12 @@ def main() -> None:
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {n_params:,}")
+
+    try:
+        model = torch.compile(model)
+        print("torch.compile enabled")
+    except Exception:
+        pass  # not supported on this platform/version
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)

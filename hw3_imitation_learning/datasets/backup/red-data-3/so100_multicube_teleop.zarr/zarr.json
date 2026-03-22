@@ -1,0 +1,41 @@
+{
+  "attributes": {
+    "xml": "C:\\Users\\tvanteeffele.D\\Robot-Learning\\hw3_imitation_learning\\so101_gym\\assets\\so100_multicube_ee.xml",
+    "joint_names": [
+      "Rotation",
+      "Pitch",
+      "Elbow",
+      "Wrist_Pitch",
+      "Wrist_Roll",
+      "Jaw"
+    ],
+    "cube_colors": [
+      "red",
+      "green",
+      "blue"
+    ],
+    "cube_joint_names": [
+      "red_box_joint",
+      "green_box_joint",
+      "blue_box_joint"
+    ],
+    "state_joints_spec": "qpos(joints)",
+    "state_ee_spec": "ee_pos(3) + ee_quat_wxyz(4)",
+    "state_cube_spec": "not_stored_in_multicube_raw",
+    "pos_cube_red_spec": "red_cube_pos(3) + red_cube_quat_wxyz(4)",
+    "pos_cube_green_spec": "green_cube_pos(3) + green_cube_quat_wxyz(4)",
+    "pos_cube_blue_spec": "blue_cube_pos(3) + blue_cube_quat_wxyz(4)",
+    "state_goal_spec": "one_hot(red, green, blue) = 3",
+    "goal_pos_spec": "bin_center_world_xyz(3)",
+    "state_gripper_spec": "gripper_angle(1)",
+    "action_gripper_spec": "gripper_ctrl(1)",
+    "control_hz": 10.0,
+    "cameras_display": [
+      "left_wrist",
+      "angle",
+      "top"
+    ]
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
