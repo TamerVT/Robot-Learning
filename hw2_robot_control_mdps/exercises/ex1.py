@@ -18,7 +18,14 @@ def get_lemniscate_keypoint(t, a=0.2):
         y (float or np.ndarray): y coordinates of the keypoint on the lemniscate.
         z (float or np.ndarray): z coordinates of the keypoint on the lemniscate.
     """
-    raise NotImplementedError()
+    sin_t = np.sin(t)
+    cos_t = np.cos(t)
+    denom = 1 + sin_t**2
+    
+    y = a * cos_t / denom
+    z = a * cos_t * sin_t / denom
+    
+    return y, z
 
 def build_keypoints(count=16, width=0.25, x_offset=0.3, z_offset=0.25):
     """TODO:
@@ -38,7 +45,20 @@ def build_keypoints(count=16, width=0.25, x_offset=0.3, z_offset=0.25):
     Returns:
         np.ndarray: Array of shape (count, 3) containing the generated keypoints.
     """
-    raise NotImplementedError()
+    # Generate time values
+    t = np.linspace(0, 2 * np.pi, count, endpoint=False)
+    
+    # Compute y, z coordinates
+    y, z_lem = get_lemniscate_keypoint(t, a=width)
+    
+    # Create fixed x coordinates and offset z
+    x = np.full_like(t, x_offset)
+    z = z_lem + z_offset
+    
+    # Stack into (count, 3) array
+    keypoints = np.column_stack([x, y, z])
+    
+    return keypoints
 
 def ik_track(model, data, site_name, target_pos,
              damping=1e-3, pos_gain=2.0, dt=0.1, max_iters=2000):
@@ -82,10 +102,12 @@ def ik_track(model, data, site_name, target_pos,
         mujoco.mj_comPos(model, data)
 
         # TODO: compute end-effector position error
-        err_pos = ...
+        current_pos = data.site(site_name).xpos
+        err_pos = target_pos - current_pos
 
         # TODO: check if the 2-norm of the position error is within a small threshold (1e-3), if yes, break the loop
-        ...
+        if np.linalg.norm(err_pos) < 1e-3:
+            break
         
         # Get the Jacobian of the end-effector using mj_jacSite.
         jacp = np.zeros((3, num_joints)) # position Jacobian
@@ -99,7 +121,17 @@ def ik_track(model, data, site_name, target_pos,
         # [pos_gain * err_pos, rot_gain * err_rot]. Since we are ignoring orientation tracking, you can set the rotational part of the weighted error to zero.
         # Instead of directly computing the matrix inverse (which can be numerically unstable), you should use np.linalg.solve to solve the 
         # linear system (J @ J^T + damping * I) x = weighted_err for x, and then compute qdot = J^T @ x. This is more stable and efficient than computing the inverse.
-        qdot = ...
+        weighted_err = np.hstack([pos_gain * err_pos, np.zeros(3)])
+        
+        # Solve the linear system (J @ J^T + damping * I) x = weighted_err
+        # Matrix to invert (implicitly via solve)
+        A = J @ J.T + damping * np.eye(6)
+        
+        # Solve for x
+        x = np.linalg.solve(A, weighted_err)
+        
+        # Calculate qdot
+        qdot = J.T @ x
 
         # optional clamp to avoid overshoot
         qdot = np.clip(qdot, -2.0, 2.0)

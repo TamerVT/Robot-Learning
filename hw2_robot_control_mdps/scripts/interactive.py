@@ -1,5 +1,7 @@
 import mujoco
 import mujoco.viewer
+import os
+os.environ["MUJOCO_GL"] = "wgl"
 
 from __init__ import *
 

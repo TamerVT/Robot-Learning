@@ -81,21 +81,17 @@ class PPOAgent:
             action_std (torch.Tensor): std of Gaussian policy
         """
         with torch.inference_mode():
-            # TODO: Sample an action from the actor and compute the
-            # corresponding outputs.
-            #
-            # You should:
-            # 1. sample an action with self.actor.act(obs)
-            # 2. clip the action into [-1, 1]
-            # 3. compute the action log probability
-            # 4. read the current policy mean and std
-            # 5. compute the state value from the critic
-            action = ...
-            action_clipped = ...
-            action_log_prob = ...
-            action_mu = ...
-            action_std = ...
-            value = ...
+            # 1. Sample action from current Gaussian policy (also sets self.actor.distribution)
+            action = self.actor.act(obs)
+            # 2. Clip into valid action range
+            action_clipped = torch.clamp(action, -1.0, 1.0)
+            # 3. log pi(a|s) — sum over action dims handled inside get_actions_log_prob
+            action_log_prob = self.actor.get_actions_log_prob(action)
+            # 4. Mean and std of the current Gaussian (set by act -> update_distribution)
+            action_mu = self.actor.action_mean
+            action_std = self.actor.action_std
+            # 5. Critic value estimate V(s)
+            value = self.critic(obs)
 
         return action, action_clipped, value, action_log_prob, action_mu, action_std
 
@@ -119,20 +115,19 @@ class PPOAgent:
         Returns:
             torch.Tensor: scalar mean KL divergence
         """
-        # TODO: Implement the KL divergence between two Gaussian action distributions.
-        #
-        # Hint:
-        # For each action dimension:
-        #   KL = log(std / old_std)
-        #        + (old_std^2 + (old_mu - mu)^2) / (2 * std^2)
-        #        - 0.5
-        #
-        # Then:
-        # - sum over action dimensions
-        # - average over the mini-batch
-        kl_per_dim = ...
-        kl_per_sample = ...
-    
+        # KL(old || new) for independent Gaussians, per action dimension:
+        #   KL_i = log(std_i / old_std_i)
+        #          + (old_std_i^2 + (old_mu_i - mu_i)^2) / (2 * std_i^2)
+        #          - 0.5
+        kl_per_dim = (
+            torch.log(std_batch / old_std_batch)
+            + (old_std_batch.pow(2) + (old_mu_batch - mu_batch).pow(2))
+              / (2.0 * std_batch.pow(2))
+            - 0.5
+        )
+        # Sum over action dimensions, then average over the mini-batch
+        kl_per_sample = kl_per_dim.sum(dim=-1)
+
         return kl_per_sample.mean()
         
 
@@ -159,46 +154,39 @@ class PPOAgent:
         Returns:
             torch.Tensor: scaled surrogate loss
         """
-        # TODO: Implement PPO clipped surrogate objective.
-        #
-        # Hint:
-        # 1. ratio = exp(new_logp - old_logp)
-        # 2. clipped_ratio = clamp(ratio, 1 - clip_ratio, 1 + clip_ratio)
-        # 3. objective = min(ratio * adv, clipped_ratio * adv)
-        # 4. PPO minimizes loss, so use the negative mean objective
-        ratio = ...
-        clipped_ratio = ...
-        surrogate_loss = ...
-        
+        # 1. Importance sampling ratio pi_new(a|s) / pi_old(a|s)
+        ratio = torch.exp(logp_batch - old_logp_batch)
+        # 2. Clipped ratio to restrict policy update size
+        clipped_ratio = torch.clamp(ratio, 1.0 - self.clip_ratio, 1.0 + self.clip_ratio)
+        # 3. Conservative policy gradient objective (take min to form lower bound)
+        # 4. Negate because we minimise the loss (gradient ascent on objective)
+        surrogate_loss = -torch.mean(torch.min(ratio * adv_batch, clipped_ratio * adv_batch))
+
         return self.surrogate_loss_coeff * surrogate_loss
 
     def compute_value_loss(self, val_batch, old_val_batch, ret_batch):
         """
         Compute value loss with clipping.
         """
-        # TODO: Implement PPO value loss with clipping.
-        #
-        # Hint:
-        # 1. Compute unclipped value loss: (val - ret)^2
-        # 2. Clip value prediction:
-        #    old_val + clamp(val - old_val, -clip_ratio, clip_ratio)
-        # 3. Compute clipped loss
-        # 4. Take max of clipped and unclipped loss
-        # 5. Take mean and scale by value_loss_coeff
-        value_loss_unclipped = ...
-        value_clipped = ...
-        value_loss_clipped = ...
-        value_loss = ...
-        
+        # 1. Unclipped squared TD error
+        value_loss_unclipped = (val_batch - ret_batch).pow(2)
+        # 2. Clipped value prediction (prevents large value updates, mirrors policy clipping)
+        value_clipped = old_val_batch + torch.clamp(
+            val_batch - old_val_batch, -self.clip_ratio, self.clip_ratio
+        )
+        # 3. Squared error of clipped prediction
+        value_loss_clipped = (value_clipped - ret_batch).pow(2)
+        # 4. Conservative upper bound: take max of both losses per sample
+        value_loss = torch.mean(torch.max(value_loss_unclipped, value_loss_clipped))
+
         return self.value_loss_coeff * value_loss
 
     def compute_entropy_loss(self, entropy_batch):
         """
         Compute entropy regularization term.
         """
-        # TODO: Implement PPO entropy loss.
-        # Hint: PPO maximizes entropy
-        return ...
+        # PPO maximises entropy -> subtract entropy from loss (gradient ascent on entropy)
+        return -self.entropy_coeff * entropy_batch.mean()
 
     def mini_batch_generator(self, batch) -> Generator:
         """
@@ -255,24 +243,18 @@ class PPOAgent:
             val_batch = self.critic(obs_batch)
             entropy_batch = self.actor.entropy
 
-            # TODO: Complete one PPO update step.
-            #
-            # You should:
-            # 1. compute KL divergence between old and new policy
-            # 2. adjust the learning rate and update optimizer.param_groups
-            # 3. compute surrogate loss
-            # 4. compute value loss
-            # 5. compute entropy loss
-            # 6. sum them into the final loss
-            # 7. zero grad, backward, gradient clipping, optimizer step
-            kl = ...
-            self.learning_rate = ...
+            # 1. KL divergence between old and new policy distributions
+            kl = self.compute_kl_mean(old_mu_batch, old_std_batch, mu_batch, std_batch).item()
+            # 2. Adaptive learning rate schedule based on KL
+            self.learning_rate = self.adjust_learning_rate(kl, self.learning_rate)
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = self.learning_rate
-            surrogate_loss = ...
-            value_loss = ...
-            entropy_loss = ...
-            loss = ...
+            # 3-5. Individual loss terms
+            surrogate_loss = self.compute_surrogate_loss(logp_batch, old_logp_batch, adv_batch)
+            value_loss = self.compute_value_loss(val_batch, old_val_batch, ret_batch)
+            entropy_loss = self.compute_entropy_loss(entropy_batch)
+            # 6. Combined loss
+            loss = surrogate_loss + value_loss + entropy_loss
 
             self.optimizer.zero_grad()
             loss.backward()

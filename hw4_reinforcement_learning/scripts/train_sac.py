@@ -10,6 +10,10 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+# Small MLPs are bottlenecked by thread-launch overhead, not compute.
+# Single-threaded PyTorch is consistently faster for networks this size on CPU.
+torch.set_num_threads(1)
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
 
