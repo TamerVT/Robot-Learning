@@ -267,16 +267,16 @@ class SACAgent:
         # 2. Sample fresh actions for actor and alpha updates (avoids stale log_probs)
         act_new, logp_new = self.actor.act(obs)
 
-        # 3 & 4. Combined actor + alpha update in a single backward pass.
-        # actor_loss uses self.alpha.detach() so no grad flows to log_alpha from it.
-        # alpha_loss uses logp_new.detach() (inside compute_alpha_loss) so no grad
-        # flows back into the actor from it. The two gradient paths are disjoint.
+        # 3. Actor update
         actor_loss = self.compute_actor_loss(obs, act_new, logp_new)
-        alpha_loss = self.compute_alpha_loss(logp_new)
         self.actor_optimizer.zero_grad(set_to_none=True)
-        self.alpha_optimizer.zero_grad(set_to_none=True)
-        (actor_loss + alpha_loss).backward()
+        actor_loss.backward()
         self.actor_optimizer.step()
+
+        # 4. Alpha (temperature) update
+        alpha_loss = self.compute_alpha_loss(logp_new)
+        self.alpha_optimizer.zero_grad(set_to_none=True)
+        alpha_loss.backward()
         self.alpha_optimizer.step()
 
         # 5. Soft-update the target critics

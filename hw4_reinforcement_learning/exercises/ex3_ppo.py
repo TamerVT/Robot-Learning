@@ -86,12 +86,12 @@ class PPOAgent:
             # 2. Clip into valid action range
             action_clipped = torch.clamp(action, -1.0, 1.0)
             # 3. log pi(a|s) — sum over action dims handled inside get_actions_log_prob
-            action_log_prob = self.actor.get_actions_log_prob(action)
+            action_log_prob = self.actor.get_actions_log_prob(action).item()
             # 4. Mean and std of the current Gaussian (set by act -> update_distribution)
             action_mu = self.actor.action_mean
             action_std = self.actor.action_std
             # 5. Critic value estimate V(s)
-            value = self.critic(obs)
+            value = self.critic(obs).item()
 
         return action, action_clipped, value, action_log_prob, action_mu, action_std
 
