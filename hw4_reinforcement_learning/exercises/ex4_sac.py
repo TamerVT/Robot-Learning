@@ -260,7 +260,7 @@ class SACAgent:
 
         # 1. Critic update
         critic_loss = self.compute_critic_loss(obs, act, rew, next_obs, done)
-        self.critic_optimizer.zero_grad(set_to_none=True)
+        self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
@@ -269,13 +269,13 @@ class SACAgent:
 
         # 3. Actor update
         actor_loss = self.compute_actor_loss(obs, act_new, logp_new)
-        self.actor_optimizer.zero_grad(set_to_none=True)
+        self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
         # 4. Alpha (temperature) update
         alpha_loss = self.compute_alpha_loss(logp_new)
-        self.alpha_optimizer.zero_grad(set_to_none=True)
+        self.alpha_optimizer.zero_grad()
         alpha_loss.backward()
         self.alpha_optimizer.step()
 
